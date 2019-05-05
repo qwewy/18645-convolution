@@ -7,7 +7,7 @@
 
 #define SOBEL_THRESHOLD 150
 
-__inline__ __device__ char clamp(int x) {
+__inline__ __device__ unsigned char clamp(int x) {
 	if (x > SOBEL_THRESHOLD) {
 		x = 0;
 	} else if (x < 0) {
@@ -17,7 +17,7 @@ __inline__ __device__ char clamp(int x) {
 }
 
 /* assign thread per pixel, and compute individually */
-__global__ void convolve_basic(char *image, char *kernel, int W, int H, int kx_offset, int ky_offset) {
+__global__ void convolve_basic(unsigned char *image, char *kernel, int W, int H, int kx_offset, int ky_offset) {
 
 	int imageX = blockIdx.x * blockDim.x + threadIdx.x;
     int imageY = blockIdx.y * blockDim.y + threadIdx.y;
@@ -32,7 +32,7 @@ __global__ void convolve_basic(char *image, char *kernel, int W, int H, int kx_o
     			int ix = imageX + kx;
     			int iy = imageY + ky;
     			if (ix < W && iy < H && ix >= 0 && iy >= 0) {
-    				total += image[iy * W + ix] * kernel[ky * kw + kx];
+    				total += (int)(unsigned int)image[iy * W + ix] * (int)kernel[ky * kw + kx];
     			}
     		}
     	}
@@ -41,12 +41,13 @@ __global__ void convolve_basic(char *image, char *kernel, int W, int H, int kx_o
     image[imageY*W + imageX] = clamp(total);
 }
 
-void convolve(char *image, const char *kernel, int W, int H, int kx_offset, int ky_offset) {
+void convolve(unsigned char *image, const char *kernel, int W, int H, int kx_offset, int ky_offset) {
 
-    char *deviceImage, *deviceKernel;
+    unsigned char *deviceImage;
+    char *deviceKernel;
 
     int kernelNumElems = (2 * kx_offset + 1) * (2 * ky_offset + 1);
-    int imageSize = W * H * sizeof(char);
+    int imageSize = W * H * sizeof(unsigned char);
     int kernelSize = kernelNumElems * sizeof(char);
 
     cudaMalloc(&deviceImage, imageSize);
@@ -69,7 +70,7 @@ void convolve(char *image, const char *kernel, int W, int H, int kx_offset, int 
 
 
 /* assign thread per pixel, and compute individually */
-__global__ void sobel_basic(char *image, char *kernelX, char *kernelY, int W, int H, int kx_offset, int ky_offset) {
+__global__ void sobel_basic(unsigned char *image, char *kernelX, char *kernelY, int W, int H, int kx_offset, int ky_offset) {
 
     int imageX = blockIdx.x * blockDim.x + threadIdx.x;
     int imageY = blockIdx.y * blockDim.y + threadIdx.y;
@@ -85,8 +86,8 @@ __global__ void sobel_basic(char *image, char *kernelX, char *kernelY, int W, in
                 int ix = imageX + kx;
                 int iy = imageY + ky;
                 if (ix < W && iy < H && ix >= 0 && iy >= 0) {
-                    totalX += image[iy * W + ix] * kernelX[ky * kw + kx];
-                    totalY += image[iy * W + ix] * kernelY[ky * kw + kx];
+                    totalX += (int)(unsigned int)image[iy * W + ix] * (int)kernelX[ky * kw + kx];
+                    totalY += (int)(unsigned int)image[iy * W + ix] * (int)kernelY[ky * kw + kx];
                 }
             }
         }
@@ -97,12 +98,13 @@ __global__ void sobel_basic(char *image, char *kernelX, char *kernelY, int W, in
     image[imageY*W + imageX] = clamp((int)sqrtf(powf((float)totalX, 2) + powf((float)totalY, 2)));
 }
 
-void sobel(char *image, const char *kernelX, const char *kernelY, int W, int H, int kx_offset, int ky_offset) {
+void sobel(unsigned char *image, const char *kernelX, const char *kernelY, int W, int H, int kx_offset, int ky_offset) {
 
-    char *deviceImage, *deviceKernelX, *deviceKernelY;
+    unsigned char *deviceImage;
+    char *deviceKernelX, *deviceKernelY;
 
     int kernelNumElems = (2 * kx_offset + 1) * (2 * ky_offset + 1);
-    int imageSize = W * H * sizeof(char);
+    int imageSize = W * H * sizeof(unsigned char);
     int kernelSize = kernelNumElems * sizeof(char);
 
     cudaMalloc(&deviceImage, imageSize);
