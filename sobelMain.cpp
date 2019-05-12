@@ -97,7 +97,7 @@ inline void run_test(const char *header,
 
 int main(int argc, char **argv) {
 
-    double seq_time, parBasic_time, parConst_time, parShared_time;
+    double seq_time;
 
     cv::Mat image;
     image = cv::imread(argv[1], CV_LOAD_IMAGE_GRAYSCALE);   // Read the file
