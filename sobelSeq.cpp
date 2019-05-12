@@ -20,6 +20,7 @@ int convolveSeq(unsigned char *image,
         for (int j = 0; j < KERNEL_SIZE; j ++) {
             int currRow = row + i - 1;
             int currCol = col + j - 1;
+
             if (currRow >= 0 &&
                 currRow < height &&
                 currCol >= 0 &&
@@ -43,7 +44,7 @@ void sobelSeq(unsigned char *inImage,
               int H) {
     int convMin = INT_MAX;
     int convMax = INT_MIN;
-    int convResult[H * W];
+    int *convResult = new int[H * W];
 
     for (int row = 0; row < H; row ++) {
         for (int col = 0; col < W; col ++) {
@@ -62,4 +63,6 @@ void sobelSeq(unsigned char *inImage,
             outImage[row * W + col] = MAX_BRIGHTNESS * resultNorm;
         }
     }
+
+    delete convResult;
 }

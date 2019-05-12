@@ -6,6 +6,13 @@
 #define KERNEL_SIZE 3
 #define MAX_BRIGHTNESS 255
 
+void sobelParBasic(unsigned char *inImage,
+                   unsigned char *outImage,
+                   const char *kernelX,
+                   const char *kernelY,
+                   int W,
+                   int H);
+
 void sobelPar(unsigned char *inImage,
               unsigned char *outImage,
               const char *kernelX,

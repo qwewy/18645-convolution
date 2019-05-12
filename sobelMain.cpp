@@ -2,6 +2,8 @@
 #include <sobel.hpp>
 #include <opencv2/opencv.hpp>
 
+#define ITER 5
+
 typedef struct {
 	int kx_offset;
 	int ky_offset;
@@ -48,7 +50,8 @@ cv::Mat arrayToMat(unsigned char *image, int rows, int cols) {
 
 int main(int argc, char **argv) {
 
-    clock_t start, end;
+    clock_t seq_start, seq_end, par_start, par_end;
+    double seq_time, par_time, curr_seq_time, curr_par_time;
 
     cv::Mat image;
     image = cv::imread(argv[1], CV_LOAD_IMAGE_GRAYSCALE);   // Read the file
@@ -58,16 +61,43 @@ int main(int argc, char **argv) {
     unsigned char outImagePar[image.rows * image.cols];
     matToArray(image, inImage);
 
-    // TODO: add timing
-    start = clock();
-    sobelSeq(inImage, outImageSeq, sobelX.kernel, sobelY.kernel, image.cols, image.rows);
-    end = clock();
-    printf("sequential runtime: %.5f\n", ((double)(end - start)) / CLOCKS_PER_SEC);
+    for (int i = 0; i < ITER; i ++) {
+        seq_start = clock();
+        sobelSeq(inImage, outImageSeq, sobelX.kernel, sobelY.kernel, image.cols, image.rows);
+        seq_end = clock();
+        curr_seq_time = ((double)(seq_end - seq_start)) / CLOCKS_PER_SEC;
+        printf("ITER: %d, sequential runtime: %.10f\n", i, curr_seq_time);
 
-    start = clock();
-    sobelPar(inImage, outImagePar, sobelX.kernel, sobelY.kernel, image.cols, image.rows);
-    end = clock();
-    printf("parallel runtime: %.5f\n", ((double)(end - start)) / CLOCKS_PER_SEC);
+        seq_time += curr_seq_time;
+    }
+    seq_time /= ITER;
+    printf("Average sequential time: %.10f\n", seq_time);
+
+    par_time = 0.0f;
+    for (int i = 0; i < ITER; i ++) {
+        par_start = clock();
+        sobelParBasic(inImage, outImagePar, sobelX.kernel, sobelY.kernel, image.cols, image.rows);
+        par_end = clock();
+        curr_par_time = ((double)(par_end - par_start)) / CLOCKS_PER_SEC;
+        printf("ITER: %d, parallel baseline runtime: %.10f\n", i, curr_par_time);
+
+        par_time += curr_par_time;
+    }
+    par_time /= ITER;
+    printf("Average parallel baseline runtime: %.10f, speedup: %.5f\n", par_time, seq_time / par_time);
+
+    par_time = 0.0f;
+    for (int i = 0; i < ITER; i ++) {
+        par_start = clock();
+        sobelPar(inImage, outImagePar, sobelX.kernel, sobelY.kernel, image.cols, image.rows);
+        par_end = clock();
+        curr_par_time = ((double)(par_end - par_start)) / CLOCKS_PER_SEC;
+        printf("ITER: %d, parallel improved runtime: %.10f\n", i, curr_par_time);
+
+        par_time += curr_par_time;
+    }
+    par_time /= ITER;
+    printf("Average parallel improved runtime: %.10f, speedup: %.5f\n", par_time, seq_time / par_time);
 
     std::cout << "Correctness check...\n";
     for (int row = 0; row < image.rows; row ++) {
