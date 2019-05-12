@@ -1,4 +1,4 @@
-PROJ = convolve
+PROJ = sobel
 CC = g++
 NVCC = nvcc
 
