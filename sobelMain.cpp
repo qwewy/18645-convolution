@@ -55,9 +55,49 @@ inline void print_header(const char* s) {
     printf("===============================================================\n");
 }
 
+inline void run_test(const char *header,
+                     double seq_time,
+                     int iterations,
+                     void (*k)(unsigned char *inImage,
+                               unsigned char *outImage,
+                               const char *kernelX,
+                               const char *kernelY,
+                               int W,
+                               int H),
+                     unsigned char *inImage,
+                     unsigned char *outImage,
+                     const char *kernelX,
+                     const char *kernelY,
+                     int W,
+                     int H
+                     ){
+
+    print_header(header);
+
+    double total = 0.0f;
+    for (int i = 0; i < iterations; i ++) {
+
+        /* run and measure code performance */
+        auto start = std::chrono::system_clock::now();
+        k(inImage, outImage, kernelX, kernelY, W, H);
+        auto end = std::chrono::system_clock::now();
+
+        /* report runtime */
+        std::chrono::duration<float> duration = end - start;
+        printf("\tITER: %d, parallel baseline runtime: %.10f\n",
+                i, duration.count());
+
+        total += duration.count();
+    }
+    total /= iterations;
+    printf("Average parallel baseline runtime: %.10f\n", total);
+    printf("speedup: %.5fx\n", seq_time / total);
+ 
+}
+
 int main(int argc, char **argv) {
 
-    double seq_time, parBasic_time, par_time;
+    double seq_time, parBasic_time, parConst_time, parShared_time;
 
     cv::Mat image;
     image = cv::imread(argv[1], CV_LOAD_IMAGE_GRAYSCALE);   // Read the file
@@ -100,54 +140,24 @@ int main(int argc, char **argv) {
     /**************************** parallel basic ******************************/
     /**************************************************************************/
 
-    print_header("parallel basic");
-
-    parBasic_time = 0.0f;
-    for (int i = 0; i < numIters; i ++) {
-
-        /* run and measure code performance */
-        auto parBasic_start = std::chrono::system_clock::now();
-        sobelParBasic(inImage, outImagePar, sobelX.kernel, 
-                      sobelY.kernel, image.cols, image.rows);
-        auto parBasic_end = std::chrono::system_clock::now();
-
-        /* report runtime */
-        std::chrono::duration<float> parBasic_duration;
-        parBasic_duration = parBasic_end - parBasic_start;
-        printf("\tITER: %d, parallel baseline runtime: %.10f\n",
-                i, parBasic_duration.count());
-
-        parBasic_time += parBasic_duration.count();
-    }
-    parBasic_time /= numIters;
-    printf("Average parallel baseline runtime: %.10f\n", parBasic_time);
-    printf("speedup: %.5fx\n", seq_time / parBasic_time);
+    run_test("parallel basic", seq_time, numIters, sobelParBasic, inImage, 
+             outImagePar, sobelX.kernel, sobelY.kernel, image.cols, image.rows);
 
     /**************************************************************************/
-    /******************************* parallel *********************************/
+    /*********************** parallel constant kernel *************************/
     /**************************************************************************/
 
-    print_header("prallel");
+    run_test("parallel w/ const kernel", seq_time, numIters, 
+             sobelParConstKernel, inImage, outImagePar, sobelX.kernel, 
+             sobelY.kernel, image.cols, image.rows);
 
-    par_time = 0.0f;
-    for (int i = 0; i < numIters; i ++) {
+    /**************************************************************************/
+    /************************** parallel shared mem ***************************/
+    /**************************************************************************/
 
-        /* run and measure code performance */
-        auto par_start = std::chrono::system_clock::now();
-        sobelPar(inImage, outImagePar, sobelX.kernel, 
-                 sobelY.kernel, image.cols, image.rows);
-        auto par_end = std::chrono::system_clock::now();
-
-        /* report runtime */
-        std::chrono::duration<float> par_duration = (par_end - par_start);
-        printf("\tITER: %d, parallel improved runtime: %.10f\n", 
-                i, par_duration.count());
-        par_time += par_duration.count();
-    }
-    par_time /= numIters;
-
-    printf("Average parallel improved runtime: %.10f\n", par_time);
-    printf("speedup: %.5fx\n", seq_time / par_time);
+    run_test("parallel w/ shared mem", seq_time, numIters, 
+             sobelParSharedMem, inImage, outImagePar, sobelX.kernel, 
+             sobelY.kernel, image.cols, image.rows);
 
     /**************************************************************************/
     /*************************** correctness check ****************************/

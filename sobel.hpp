@@ -13,7 +13,7 @@ void sobelParBasic(unsigned char *inImage,
                    int W,
                    int H);
 
-void sobelPar(unsigned char *inImage,
+void sobelParConstKernel(unsigned char *inImage,
               unsigned char *outImage,
               const char *kernelX,
               const char *kernelY,
@@ -21,6 +21,13 @@ void sobelPar(unsigned char *inImage,
               int H);
 
 void sobelSeq(unsigned char *inImage,
+              unsigned char *outImage,
+              const char *kernelX,
+              const char *kernelY,
+              int W,
+              int H);
+
+void sobelParSharedMem(unsigned char *inImage,
               unsigned char *outImage,
               const char *kernelX,
               const char *kernelY,
