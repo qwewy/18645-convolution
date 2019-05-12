@@ -1,6 +1,8 @@
 #include <time.h>
 #include <sobel.hpp>
 #include <opencv2/opencv.hpp>
+#include <chrono>
+#include <stdlib.h>
 
 #define ITER 5
 
@@ -47,11 +49,15 @@ cv::Mat arrayToMat(unsigned char *image, int rows, int cols) {
 	return ret;
 }
 
+inline void print_header(const char* s) {
+    printf("===============================================================\n");
+    printf("%s\n", s);
+    printf("===============================================================\n");
+}
 
 int main(int argc, char **argv) {
 
-    clock_t seq_start, seq_end, par_start, par_end;
-    double seq_time, par_time, curr_seq_time, curr_par_time;
+    double seq_time, parBasic_time, par_time;
 
     cv::Mat image;
     image = cv::imread(argv[1], CV_LOAD_IMAGE_GRAYSCALE);   // Read the file
@@ -61,43 +67,93 @@ int main(int argc, char **argv) {
     unsigned char outImagePar[image.rows * image.cols];
     matToArray(image, inImage);
 
-    for (int i = 0; i < ITER; i ++) {
-        seq_start = clock();
-        sobelSeq(inImage, outImageSeq, sobelX.kernel, sobelY.kernel, image.cols, image.rows);
-        seq_end = clock();
-        curr_seq_time = ((double)(seq_end - seq_start)) / CLOCKS_PER_SEC;
-        printf("ITER: %d, sequential runtime: %.10f\n", i, curr_seq_time);
+    int numIters = argc < 3 ? ITER : atoi(argv[2]);
 
-        seq_time += curr_seq_time;
+
+    /**************************************************************************/
+    /****************************** sequential ********************************/
+    /**************************************************************************/
+
+    print_header("sequential");
+
+    seq_time = 0.f;
+    for (int i = 0; i < numIters; i ++) {
+
+        /* run and measure code performance */
+        auto seq_start = std::chrono::system_clock::now();
+        sobelSeq(inImage, outImageSeq, sobelX.kernel, 
+                 sobelY.kernel, image.cols, image.rows);
+        auto seq_end = std::chrono::system_clock::now();
+
+        /* report runtime */
+        std::chrono::duration<float> seq_duration = (seq_end - seq_start);
+        printf("\tITER: %d, sequential runtime: %.10f\n", 
+                i, seq_duration.count());
+
+        seq_time += seq_duration.count();
     }
-    seq_time /= ITER;
+    seq_time /= numIters;
     printf("Average sequential time: %.10f\n", seq_time);
 
-    par_time = 0.0f;
-    for (int i = 0; i < ITER; i ++) {
-        par_start = clock();
-        sobelParBasic(inImage, outImagePar, sobelX.kernel, sobelY.kernel, image.cols, image.rows);
-        par_end = clock();
-        curr_par_time = ((double)(par_end - par_start)) / CLOCKS_PER_SEC;
-        printf("ITER: %d, parallel baseline runtime: %.10f\n", i, curr_par_time);
 
-        par_time += curr_par_time;
+    /**************************************************************************/
+    /**************************** parallel basic ******************************/
+    /**************************************************************************/
+
+    print_header("parallel basic");
+
+    parBasic_time = 0.0f;
+    for (int i = 0; i < numIters; i ++) {
+
+        /* run and measure code performance */
+        auto parBasic_start = std::chrono::system_clock::now();
+        sobelParBasic(inImage, outImagePar, sobelX.kernel, 
+                      sobelY.kernel, image.cols, image.rows);
+        auto parBasic_end = std::chrono::system_clock::now();
+
+        /* report runtime */
+        std::chrono::duration<float> parBasic_duration;
+        parBasic_duration = parBasic_end - parBasic_start;
+        printf("\tITER: %d, parallel baseline runtime: %.10f\n",
+                i, parBasic_duration.count());
+
+        parBasic_time += parBasic_duration.count();
     }
-    par_time /= ITER;
-    printf("Average parallel baseline runtime: %.10f, speedup: %.5f\n", par_time, seq_time / par_time);
+    parBasic_time /= numIters;
+    printf("Average parallel baseline runtime: %.10f\n", parBasic_time);
+    printf("speedup: %.5fx\n", seq_time / parBasic_time);
+
+    /**************************************************************************/
+    /******************************* parallel *********************************/
+    /**************************************************************************/
+
+    print_header("prallel");
 
     par_time = 0.0f;
-    for (int i = 0; i < ITER; i ++) {
-        par_start = clock();
-        sobelPar(inImage, outImagePar, sobelX.kernel, sobelY.kernel, image.cols, image.rows);
-        par_end = clock();
-        curr_par_time = ((double)(par_end - par_start)) / CLOCKS_PER_SEC;
-        printf("ITER: %d, parallel improved runtime: %.10f\n", i, curr_par_time);
+    for (int i = 0; i < numIters; i ++) {
 
-        par_time += curr_par_time;
+        /* run and measure code performance */
+        auto par_start = std::chrono::system_clock::now();
+        sobelPar(inImage, outImagePar, sobelX.kernel, 
+                 sobelY.kernel, image.cols, image.rows);
+        auto par_end = std::chrono::system_clock::now();
+
+        /* report runtime */
+        std::chrono::duration<float> par_duration = (par_end - par_start);
+        printf("\tITER: %d, parallel improved runtime: %.10f\n", 
+                i, par_duration.count());
+        par_time += par_duration.count();
     }
-    par_time /= ITER;
-    printf("Average parallel improved runtime: %.10f, speedup: %.5f\n", par_time, seq_time / par_time);
+    par_time /= numIters;
+
+    printf("Average parallel improved runtime: %.10f\n", par_time);
+    printf("speedup: %.5fx\n", seq_time / par_time);
+
+    /**************************************************************************/
+    /*************************** correctness check ****************************/
+    /**************************************************************************/
+
+    print_header("correctness check");
 
     std::cout << "Correctness check...\n";
     for (int row = 0; row < image.rows; row ++) {

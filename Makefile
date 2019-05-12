@@ -2,7 +2,7 @@ PROJ = sobel
 CC = g++
 NVCC = nvcc
 
-CFLAGS = -c -g -Wall -I/opt/local/include -I$(HOME)/cppunit/include
+CFLAGS = -c -g -std=c++11 -O3 -Wall -I/opt/local/include -I$(HOME)/cppunit/include
 CFLAGS += $(shell pkg-config --cflags $(OPENCV))
 LDFLAGS = -L/opt/local/lib -L$(HOME)/cppunit/lib
 LIBS = -lcppunit -ldl
