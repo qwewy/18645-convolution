@@ -4,10 +4,15 @@
 #include <math.h>
 #include <sobel.hpp>
 #include <stdio.h>
+#include <assert.h>
 
 #define THREADS_PER_BLOCK_X 32
 #define THREADS_PER_BLOCK_Y 32
 #define THREADS_PER_BLOCK 1024
+
+#define SHARED_ROWS 34
+#define SHARED_COLS 34
+#define SHARED_TOTAL 1156
 
 __constant__ char cudaKernelX[KERNEL_SIZE * KERNEL_SIZE];
 __constant__ char cudaKernelY[KERNEL_SIZE * KERNEL_SIZE];
@@ -101,18 +106,115 @@ __global__ void convolveSharedMem(unsigned char *image,
                                   int W,
                                   int H) {
 
-    __shared__ unsigned char blockImage[THREADS_PER_BLOCK];
+    __shared__ unsigned char blockImage[SHARED_TOTAL];
 
     int imageX = blockIdx.x * blockDim.x + threadIdx.x;
     int imageY = blockIdx.y * blockDim.y + threadIdx.y;
+    int imageIndex = imageY * W + imageX;
 
     int totalX = 0;
     int totalY = 0;
 
+    int blockIndexX = threadIdx.x + 1;
+    int blockIndexY = threadIdx.y + 1;
+    int blockIndex = blockIndexY * SHARED_COLS + blockIndexX;
+
     if (imageX < W && imageY < H) {
-        blockImage[threadIdx.y * blockDim.x + threadIdx.x] = image[imageY * W + imageX];
+        blockImage[blockIndex] = image[imageY * W + imageX];
+
+        // topleft pixel, find the pixels to its left, top and upperleft
+        if (threadIdx.x == 0 && threadIdx.y == 0) {
+            // pixel to the upperleft
+            blockImage[0] = (imageX == 0 || imageY == 0) ? 0 :
+                            image[imageIndex - W - 1];
+
+            // pixel to the left
+            blockImage[blockIndex - 1] =
+                (imageX == 0) ? 0 : image[imageIndex - 1];
+
+            // pixel to the top
+            blockImage[blockIndexX] =
+                (imageY == 0) ? 0 : image[imageIndex - W];
+        }
+
+        // bottomright pixel
+        else if ((threadIdx.x == blockDim.x - 1 || imageX == W - 1) &&
+                 (threadIdx.y == blockDim.y - 1 || imageY == H - 1)) {
+            // pixel to the bottomright
+            blockImage[blockIndex + SHARED_COLS + 1] =
+                (imageY == H - 1 || imageX == W - 1) ? 0 : image[imageIndex + W + 1];
+
+            // pixel to the right
+            blockImage[blockIndex + 1] =
+                (imageX == W - 1) ? 0 : image[imageIndex + 1];
+
+            // pixel to the bottom
+            blockImage[blockIndex + SHARED_COLS] =
+                (imageY == H - 1) ? 0 : image[imageIndex + W];
+        }
+
+        // bottomleft pixel
+        else if (threadIdx.x == 0 &&
+                 (threadIdx.y == blockDim.y - 1 || imageY == H - 1)) {
+            // pixel to the bottomleft
+            blockImage[blockIndex + SHARED_COLS - 1] =
+                (imageY == H - 1 || imageX == 0) ? 0 : image[imageIndex + W - 1];
+
+            // pixel to the bottom
+            blockImage[blockIndex + SHARED_COLS] =
+                (imageY == H - 1) ? 0 : image[imageIndex + W];
+
+            // pixel to the left
+            blockImage[blockIndex - 1] =
+                (imageX == 0) ? 0 : image[imageIndex - 1];
+        }
+
+        // topright pixel
+        else if ((threadIdx.x == blockDim.x - 1 || imageX == W - 1) &&
+                 threadIdx.y == 0) {
+            // pixel to the upperright
+            blockImage[blockIndexX + 1] =
+                (imageY == 0 || imageX == W - 1) ? 0 : image[imageIndex - W + 1];
+
+            // pixel to the top
+            blockImage[blockIndexX] =
+                (imageY == 0) ? 0 : image[imageIndex - W];
+
+            // pixel to the right
+            blockImage[blockIndex + 1] =
+                (imageX == W - 1) ? 0 : image[imageIndex + 1];
+        }
+
+        // if the pixel is in the leftmost column, find the pixel value to
+        // its left in the image or 0
+        else if (threadIdx.x == 0) {
+            blockImage[blockIndex - 1] =
+                (imageX == 0) ? 0 : image[imageIndex - 1];
+        }
+
+        // if the pixel is in the top row, find the pixel value to its top
+        // in the image or 0
+        else if (threadIdx.y == 0) {
+            blockImage[blockIndexX] =
+                (imageY == 0) ? 0 : image[imageIndex - W];
+        }
+
+        // if the pixel is in the rightmost column, find the pixel value
+        // to its right in the image or 0
+        else if (threadIdx.x == blockDim.x - 1 || imageX == W - 1) {
+            blockImage[blockIndex + 1] =
+                (imageX == W - 1) ? 0 : image[imageIndex + 1];
+        }
+
+        // if the pixel is in the bottom row, find the pixel value
+        // to its bottom or 0
+        else if (threadIdx.y == blockDim.y - 1 || imageY == H - 1) {
+            blockImage[blockIndex + SHARED_COLS] =
+                (imageY == H - 1) ? 0 : image[imageIndex + W];
+        }
+
     } else {
-        blockImage[threadIdx.y * blockDim.x + threadIdx.x] = 0;
+        blockImage[blockIndex] = 0;
     }
 
     __syncthreads();
@@ -120,34 +222,17 @@ __global__ void convolveSharedMem(unsigned char *image,
     if (imageX >= 0 && imageX < W && imageY >= 0 && imageY < H) {
         for (int i = 0; i < KERNEL_SIZE; i ++) {
             for (int j = 0; j < KERNEL_SIZE; j ++) {
-                int blockRow = (int)threadIdx.y + i - 1;
-                int blockCol = (int)threadIdx.x + j - 1;
-                int imageRow = imageY + i - 1;
-                int imageCol = imageX + j - 1;
+                int blockRow = blockIndexY + i - 1;
+                int blockCol = blockIndexX + j - 1;
 
-                int pixel = 0;
-
-                if (blockRow >= 0 &&
-                    blockRow < (int)blockDim.y &&
-                    blockCol >= 0 &&
-                    blockCol < (int)blockDim.x) {
-                    pixel = (int)(unsigned int)blockImage[blockRow * blockDim.x + blockCol];
-                } else if (imageRow >= 0 &&
-                           imageRow < H &&
-                           imageCol >= 0 &&
-                           imageCol < W) {
-
-                    // the pixel resides in another block
-                    pixel = (int)(unsigned int)image[imageRow * W + imageCol];
-                }
-
+                int pixel = (int)(unsigned int)blockImage[blockRow * SHARED_COLS + blockCol];
                 totalX += pixel * (int)cudaKernelX[i * KERNEL_SIZE + j];
                 totalY += pixel * (int)cudaKernelY[i * KERNEL_SIZE + j];
             }
         }
 
         int currConvResult = sqrtf(totalX * totalX + totalY * totalY);
-        convResult[imageY * W + imageX] = currConvResult;
+        convResult[imageIndex] = currConvResult;
 
         atomicMax(convMax, currConvResult);
         atomicMin(convMin, currConvResult);

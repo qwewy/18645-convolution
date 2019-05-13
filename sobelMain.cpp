@@ -92,7 +92,7 @@ inline void run_test(const char *header,
     total /= iterations;
     printf("Average parallel baseline runtime: %.10f\n", total);
     printf("speedup: %.5fx\n", seq_time / total);
- 
+
 }
 
 int main(int argc, char **argv) {
@@ -121,13 +121,13 @@ int main(int argc, char **argv) {
 
         /* run and measure code performance */
         auto seq_start = std::chrono::system_clock::now();
-        sobelSeq(inImage, outImageSeq, sobelX.kernel, 
+        sobelSeq(inImage, outImageSeq, sobelX.kernel,
                  sobelY.kernel, image.cols, image.rows);
         auto seq_end = std::chrono::system_clock::now();
 
         /* report runtime */
         std::chrono::duration<float> seq_duration = (seq_end - seq_start);
-        printf("\tITER: %d, sequential runtime: %.10f\n", 
+        printf("\tITER: %d, sequential runtime: %.10f\n",
                 i, seq_duration.count());
 
         seq_time += seq_duration.count();
@@ -135,28 +135,31 @@ int main(int argc, char **argv) {
     seq_time /= numIters;
     printf("Average sequential time: %.10f\n", seq_time);
 
+    // run one cuda version just to get noise out of the way
+    sobelParBasic(inImage, outImagePar, sobelX.kernel, sobelY.kernel,
+                  image.cols, image.rows);
 
     /**************************************************************************/
     /**************************** parallel basic ******************************/
     /**************************************************************************/
 
-    run_test("parallel basic", seq_time, numIters, sobelParBasic, inImage, 
+    run_test("parallel basic", seq_time, numIters, sobelParBasic, inImage,
              outImagePar, sobelX.kernel, sobelY.kernel, image.cols, image.rows);
 
     /**************************************************************************/
     /*********************** parallel constant kernel *************************/
     /**************************************************************************/
 
-    run_test("parallel w/ const kernel", seq_time, numIters, 
-             sobelParConstKernel, inImage, outImagePar, sobelX.kernel, 
+    run_test("parallel w/ const kernel", seq_time, numIters,
+             sobelParConstKernel, inImage, outImagePar, sobelX.kernel,
              sobelY.kernel, image.cols, image.rows);
 
     /**************************************************************************/
     /************************** parallel shared mem ***************************/
     /**************************************************************************/
 
-    run_test("parallel w/ shared mem", seq_time, numIters, 
-             sobelParSharedMem, inImage, outImagePar, sobelX.kernel, 
+    run_test("parallel w/ shared mem", seq_time, numIters,
+             sobelParSharedMem, inImage, outImagePar, sobelX.kernel,
              sobelY.kernel, image.cols, image.rows);
 
     /**************************************************************************/

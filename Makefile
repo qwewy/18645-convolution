@@ -21,7 +21,7 @@ $(PROJ): $(OBJS) $(TEST_CASES)
 	$(NVCC) -arch=sm_61 $(LDFLAGS) $(INC_FLAGS) $^ -o $@ $(LIBS)
 
 %.o : %.cu
-	$(NVCC) $(INC_FLAGS) -arch=sm_61 -c $< -o $@
+	$(NVCC) -g -pg -O3 $(INC_FLAGS) -arch=sm_61 -c $< -o $@
 
 %.o : %.cpp
 	$(CC) $(CFLAGS) $(INC_FLAGS) $< -o $@
